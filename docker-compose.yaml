@@ -1,18 +1,4 @@
-version: "3.8"
-
-# https://docs.docker.com/config/containers/logging/json-file/
-# https://docs.docker.com/config/containers/logging/log_tags/
-x-logging: &loki-logging
-  logging:
-    driver: 'json-file'
-    options:
-      max-size: '50m'
-      max-file: '3'
-      tag: "{{.ImageName}}|{{.Name}}|{{.ImageFullID}}|{{.FullID}}"
-
-x-networking: &aliare-networking
-  networks:
-    - default
+#version: "3.8"
 
 services:
   # https://prometheus.io/
@@ -39,8 +25,6 @@ services:
         source: ./prometheus
         target: /etc/prometheus
         read_only: true
-    <<: *loki-logging
-    <<: *aliare-networking
 
   # https://prometheus.io/docs/alerting/latest/alertmanager/
   alertmanager:
@@ -61,8 +45,7 @@ services:
         read_only: true
     depends_on:
       - prometheus
-    <<: *loki-logging
-    <<: *aliare-networking
+
 
   # https://grafana.com/docs/grafana/latest/installation/docker/
   grafana:
@@ -83,49 +66,6 @@ services:
         source: ./grafana/provisioning
         target: /etc/grafana/provisioning
         read_only: true
-    <<: *loki-logging
-    <<: *aliare-networking
-
-  # https://grafana.com/docs/loki/latest/configuration/
-  loki:
-    container_name: loki
-    image: grafana/loki:main-7be3efa
-    restart: unless-stopped
-    ports:
-      - target: 3100
-        published: 3100
-        protocol: tcp
-        mode: host
-    command:
-      - -config.file=/etc/loki/loki.yml
-    volumes:
-      - type: bind
-        source: ./loki
-        target: /etc/loki
-        read_only: true
-      - type: volume
-        source: loki-volume
-        target: /loki
-    <<: *loki-logging
-    <<: *aliare-networking
-
-  # https://grafana.com/docs/loki/latest/clients/promtail/
-  promtail:
-    container_name: promtail
-    image: grafana/promtail:main-7be3efa
-    restart: unless-stopped
-    command:
-      - -config.file=/etc/promtail/promtail.yml
-    volumes:
-      - type: bind
-        source: ./promtail
-        target: /etc/promtail
-      - type: bind
-        source: /var/lib/docker/containers
-        target: /var/lib/docker/containers
-        read_only: true
-    <<: *loki-logging
-    <<: *aliare-networking
 
   # https://github.com/google/cadvisor
   cadvisor:
@@ -158,8 +98,7 @@ services:
         source: /dev/disk
         target: /dev/disk
         read_only: true
-    <<: *loki-logging
-    <<: *aliare-networking
+
 
   # https://redis.io/
   # redis:
@@ -168,39 +107,39 @@ services:
 
   # https://github.com/prometheus/node_exporter
 
-  node_exporter:
-    image: prom/node-exporter:v1.9.1
+  node-exporter:
+    image: prom/node-exporter:latest
     container_name: node_exporter
     restart: unless-stopped
-    ports:
-      - target: 9100
-        published: 9100
-        protocol: tcp
-        mode: host
-    command:
-      - --path.procfs=/host/proc
-      - --path.rootfs=/rootfs
-      - --path.sysfs=/host/sys
-      - --collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)
-    volumes:
-      - type: bind
-        source: /
-        target: /host
-        read_only: true
-        bind:
-          propagation: rslave
-    <<: *loki-logging
+    expose:
+      - 9100
+
+
+
+#  windows_exporter:
+#    image: docker.io/prometheuscommunity/windows-exporter:v0.31.0
+#    container_name: windows_exporter
+#    restart: unless-stopped
+#    ports:
+#      - "9100:9100"
+#    volumes:
+#      - /proc:/host/proc:ro
+#      - /sys:/host/sys:ro
+#      - /:/rootfs:ro
+#    command:
+#      - '--path.procfs=/host/proc'
+#      - '--path.sysfs=/host/sys'
+#      - '--path.rootfs=/rootfs'
+#      - '--collector.filesystem.ignored-mount-points=^/(sys|proc|dev|host|etc)($|/)'
+#    networks:
+#      - monitoring
+
+networks:
+  monitoring:
+    driver: bridge
 
 volumes:
   grafana-volume:
     name: grafana-volume
-  loki-volume:
-    name: loki-volume
-  loki-minio-volume:
-    name: loki-minio-volume
   prometheus-volume:
     name: prometheus-volume
-
-networks:
-  default:
-    name: aliare
