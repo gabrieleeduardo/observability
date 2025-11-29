@@ -1,0 +1,145 @@
+#version: "3.8"
+
+services:
+  # https://prometheus.io/
+  prometheus:
+    container_name: prometheus
+    image: prom/prometheus:v3.4.2
+    restart: unless-stopped
+    ports:
+      - target: 9090
+        published: 9090
+        protocol: tcp
+        mode: host
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=15d
+      - --web.enable-lifecycle
+      - --web.enable-admin-api
+    volumes:
+      - type: volume
+        source: prometheus-volume
+        target: /prometheus
+      - type: bind
+        source: ./prometheus
+        target: /etc/prometheus
+        read_only: true
+
+  # https://prometheus.io/docs/alerting/latest/alertmanager/
+  alertmanager:
+    image: prom/alertmanager:v0.23.0
+    container_name: alertmanager
+    restart: unless-stopped
+    ports:
+      - target: 9093
+        published: 9093
+        protocol: tcp
+        mode: host
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+    volumes:
+      - type: bind
+        source: ./alertmanager
+        target: /etc/alertmanager
+        read_only: true
+    depends_on:
+      - prometheus
+
+
+  # https://grafana.com/docs/grafana/latest/installation/docker/
+  grafana:
+    container_name: grafana
+    image: grafana/grafana:12.0.2
+    ports:
+      - target: 3000
+        published: 3000
+        protocol: tcp
+        mode: host
+    environment:
+      GF_INSTALL_PLUGINS: "grafana-clock-panel,grafana-simple-json-datasource"
+    volumes:
+      - type: volume
+        source: grafana-volume
+        target: /var/lib/grafana
+      - type: bind
+        source: ./grafana/provisioning
+        target: /etc/grafana/provisioning
+        read_only: true
+
+  # https://github.com/google/cadvisor
+  cadvisor:
+    container_name: cadvisor
+    image: google/cadvisor:v0.33.0
+    privileged: true
+    devices:
+      - /dev/kmsg
+    volumes:
+      - type: bind
+        source: /
+        target: /rootfs
+        read_only: true
+      - type: bind
+        source: /var/run
+        target: /var/run
+      - type: bind
+        source: /sys
+        target: /sys
+        read_only: true
+      - type: bind
+        source: /sys/fs/cgroup
+        target: /sys/fs/cgroup
+        read_only: true
+      - type: bind
+        source: /var/lib/docker
+        target: /var/lib/docker
+        read_only: true
+      - type: bind
+        source: /dev/disk
+        target: /dev/disk
+        read_only: true
+
+
+  # https://redis.io/
+  # redis:
+  #   image: redis:6.2.5
+  #   container_name: redis
+
+  # https://github.com/prometheus/node_exporter
+
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: node_exporter
+    restart: unless-stopped
+    expose:
+      - 9100
+
+
+
+#  windows_exporter:
+#    image: docker.io/prometheuscommunity/windows-exporter:v0.31.0
+#    container_name: windows_exporter
+#    restart: unless-stopped
+#    ports:
+#      - "9100:9100"
+#    volumes:
+#      - /proc:/host/proc:ro
+#      - /sys:/host/sys:ro
+#      - /:/rootfs:ro
+#    command:
+#      - '--path.procfs=/host/proc'
+#      - '--path.sysfs=/host/sys'
+#      - '--path.rootfs=/rootfs'
+#      - '--collector.filesystem.ignored-mount-points=^/(sys|proc|dev|host|etc)($|/)'
+#    networks:
+#      - monitoring
+
+networks:
+  monitoring:
+    driver: bridge
+
+volumes:
+  grafana-volume:
+    name: grafana-volume
+  prometheus-volume:
+    name: prometheus-volume
